@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "DrinkCounter",
+    "slug": "drink-counter",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "drinkcounter",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.drinkcounter.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.drinkcounter.app",
+      "versionCode": 1
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "supabaseUrl": "https://bclmvdrctlrfjzyblzbq.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjbG12ZHJjdGxyZmp6eWJsemJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NTg1MDAsImV4cCI6MjA4NTUzNDUwMH0.yew0fWADs5f9neqWGEKRRofs9HYEbFA8NE7pA4_0NWU",
+      "router": {},
+      "eas": {
+        "projectId": "64e63fae-70f3-40f7-9d38-1271390b742d"
+      }
+    }
+  }
+}
