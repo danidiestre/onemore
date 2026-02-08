@@ -10,6 +10,8 @@ export interface SessionData {
   inviteCode: string;
   isOwner: boolean;
   sessionName: string;
+  /** When user joined via link and claimed a participant */
+  currentParticipantId: string | null;
 }
 
 export async function createSession(
@@ -104,6 +106,9 @@ export async function loadSessionData(sessionId: string): Promise<SessionData> {
 
   if (eventsError) throw eventsError;
 
+  const currentParticipant =
+    participants?.find((p) => p.claimed_by_user_id === user.id) ?? null;
+
   return {
     participants: participants || [],
     drinkTypes: drinkTypes || [],
@@ -111,6 +116,7 @@ export async function loadSessionData(sessionId: string): Promise<SessionData> {
     inviteCode: session.invite_code,
     isOwner: session.owner_user_id === user.id,
     sessionName: session.name,
+    currentParticipantId: currentParticipant?.id ?? null,
   };
 }
 
@@ -252,6 +258,24 @@ export async function updateParticipant(
   if (error) throw error;
 }
 
+export async function deleteSession(sessionId: string): Promise<void> {
+  const user = await ensureAuthenticated();
+
+  const { data: session, error: fetchError } = await supabase
+    .from('sessions')
+    .select('owner_user_id')
+    .eq('id', sessionId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!session) throw new Error('Session not found');
+  if (session.owner_user_id !== user.id) throw new Error('Only the owner can delete the session');
+
+  const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
+
+  if (error) throw error;
+}
+
 export async function addDrinkType(
   sessionId: string,
   drinkType: {
@@ -267,6 +291,29 @@ export async function addDrinkType(
     .insert({
       session_id: sessionId,
       ...drinkType,
+    });
+
+  if (error) throw error;
+}
+
+export async function upsertParticipantBalances(
+  sessionId: string,
+  balances: { participant_id: string; amount_cents: number }[]
+): Promise<void> {
+  if (balances.length === 0) return;
+
+  const rows = balances.map(({ participant_id, amount_cents }) => ({
+    session_id: sessionId,
+    participant_id,
+    amount_cents: Math.max(0, Math.round(amount_cents)),
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from('participant_balances')
+    .upsert(rows, {
+      onConflict: 'session_id,participant_id',
+      ignoreDuplicates: false,
     });
 
   if (error) throw error;

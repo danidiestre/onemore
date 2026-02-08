@@ -6,10 +6,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
 import type { Participant, DrinkType, DrinkEvent } from '@/types/database';
 import { loadSessionData, addDrinkEvent, addParticipantSlot, removeParticipantSlot } from '@/repo/sessions';
+import { getInviteLink } from '@/utils/invite';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_HORIZONTAL_PADDING = 10;
+const CARD_WIDTH = SCREEN_WIDTH - 2 * CARD_HORIZONTAL_PADDING;
 
 // Color palette for participant cards - must match the array in participant/[participantId].tsx
 const PARTICIPANT_COLORS = [
@@ -62,6 +65,7 @@ export default function SessionScreen() {
   const [inviteCode, setInviteCode] = useState<string>('');
   const [sessionName, setSessionName] = useState<string>('');
   const [isOwner, setIsOwner] = useState(false);
+  const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [recentEvents, setRecentEvents] = useState<Map<string, { count: number; timestamp: number }>>(new Map());
   const participantColorMapRef = useRef<Map<string, number>>(new Map());
@@ -161,7 +165,8 @@ export default function SessionScreen() {
       setInviteCode(data.inviteCode);
       setSessionName(data.sessionName);
       setIsOwner(data.isOwner);
-      
+      setCurrentParticipantId(data.currentParticipantId ?? null);
+
       // Update color map: use saved color_index if available, otherwise assign based on creation order
       // This ensures colors are always consistent regardless of when data is reloaded
       const sortedParticipants = [...data.participants].sort((a, b) => 
@@ -287,7 +292,8 @@ export default function SessionScreen() {
 
   const handleIncrement = (participantId: string, drinkTypeId?: string) => {
     if (!id || drinkTypes.length === 0) return;
-    
+    if (!isOwner && currentParticipantId !== null && participantId !== currentParticipantId) return;
+
     const selectedDrinkTypeId = drinkTypeId || (drinkTypes.length === 1 ? drinkTypes[0].id : null);
     
     // If multiple drink types and no drinkTypeId provided, show picker
@@ -339,7 +345,8 @@ export default function SessionScreen() {
 
   const handleDecrement = (participantId: string) => {
     if (!id || drinkTypes.length === 0) return;
-    
+    if (!isOwner && currentParticipantId !== null && participantId !== currentParticipantId) return;
+
     // If multiple drink types, show picker, otherwise use first one
     if (drinkTypes.length > 1) {
       showDrinkTypePicker(participantId, -1);
@@ -522,8 +529,8 @@ export default function SessionScreen() {
 
   const handleShareLink = useCallback(async () => {
     if (!inviteCode) return;
-    
-    const shareUrl = `drinkcounter://join/${inviteCode}`;
+
+    const shareUrl = getInviteLink(inviteCode);
     const shareMessage = `Join my drink counter session!\n\nCode: ${inviteCode}\n\nOr open this link: ${shareUrl}`;
     
     try {
@@ -665,12 +672,24 @@ export default function SessionScreen() {
         </View>
       ),
       headerRight: () => (
-        <TouchableOpacity
-          onPress={handleAddParticipantCallback}
-          activeOpacity={0.4}
-        >
-          <Ionicons name="add" size={36} color="#007AFF" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => router.push(`/session/${id}/balances`)}
+            activeOpacity={0.4}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ marginLeft: 16, marginRight: isOwner ? 38 : 16 }}
+          >
+            <Ionicons name="cash-outline" size={28} color="#007AFF" />
+          </TouchableOpacity>
+          {isOwner && (
+            <TouchableOpacity
+              onPress={handleAddParticipantCallback}
+              activeOpacity={0.4}
+            >
+              <Ionicons name="add" size={36} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+        </View>
       ),
     });
   }, [navigation, sessionName, isOwner, id, router, handleShareLink, handleAddParticipantCallback]);
@@ -801,17 +820,23 @@ export default function SessionScreen() {
     if (isScrollable) {
       // Horizontal layout for 6+ cards (like image 2)
       return (
-        <TouchableOpacity
+        <View
           style={[
             styles.participantCard,
             styles.scrollableCard,
             { backgroundColor: cardColor }
           ]}
-          onPress={() => router.push(`/session/${id}/participant/${item.id}`)}
-          activeOpacity={0.9}
         >
+          <TouchableOpacity
+            onPress={() => handleMenuPress(item.id)}
+            style={[styles.scrollableMenuButton, styles.scrollableMenuButtonAbsolute]}
+          >
+            <Text style={[styles.scrollableMenuIcon, { color: textColor }]}>⋯</Text>
+          </TouchableOpacity>
           <View style={styles.scrollableCardContent}>
-            <Text style={[styles.scrollableParticipantName, { color: textColor }]}>{item.display_name}</Text>
+            <View style={styles.scrollableCardHeader}>
+              <Text style={[styles.scrollableParticipantName, { color: textColor }]} numberOfLines={1} ellipsizeMode="tail">{item.display_name}</Text>
+            </View>
             <View style={[styles.scrollableCounterContainer, participantCount && participantCount > 2 ? { paddingRight: 16 } : null]}>
               <View style={styles.scrollableCounterRow}>
                 <TouchableOpacity
@@ -858,7 +883,7 @@ export default function SessionScreen() {
               </View>
             </View>
           )}
-        </TouchableOpacity>
+        </View>
       );
     }
     
@@ -874,13 +899,14 @@ export default function SessionScreen() {
     } else if (participantCount === 4) {
       fixedCountFontSize = 85;
     } else if (participantCount === 5) {
-      fixedCountFontSize = 60;
+      fixedCountFontSize = 48;
     }
     
     // Vertical layout for 1-5 cards: name on top, counter centered
     const isSmallCard = participantCount === 5 || participantCount === 4;
+    const isSmallestCard = participantCount === 5;
     return (
-      <TouchableOpacity
+      <View
         style={[
           styles.participantCard,
           styles.fixedCard,
@@ -889,12 +915,16 @@ export default function SessionScreen() {
           cardHeight ? { height: cardHeight } : null,
           borderRadius && typeof borderRadius === 'object' ? borderRadius : borderRadius ? { borderRadius } : null
         ]}
-        onPress={() => router.push(`/session/${id}/participant/${item.id}`)}
-        activeOpacity={0.9}
       >
+        <TouchableOpacity
+          onPress={() => handleMenuPress(item.id)}
+          style={[styles.fixedMenuButton, styles.fixedMenuButtonAbsolute]}
+        >
+          <Text style={[styles.fixedMenuIcon, { color: textColor }]}>⋯</Text>
+        </TouchableOpacity>
         <View style={[styles.fixedCardHeader, isSmallCard && { marginBottom: 8 }]}>
           <View style={styles.nameContainer}>
-            <Text style={[styles.fixedParticipantName, isSmallCard && { fontSize: 20 }, { color: textColor }]}>{item.display_name}</Text>
+            <Text style={[styles.fixedParticipantName, isSmallCard && { fontSize: 20 }, { color: textColor }]} numberOfLines={1} ellipsizeMode="tail">{item.display_name}</Text>
             {(() => {
               const recent = recentEvents.get(item.id);
               if (recent) {
@@ -906,37 +936,57 @@ export default function SessionScreen() {
               return null;
             })()}
           </View>
-          <TouchableOpacity
-            onPress={() => handleMenuPress(item.id)}
-            style={styles.fixedMenuButton}
-          >
-            <Text style={[styles.fixedMenuIcon, { color: textColor }]}>⋯</Text>
-          </TouchableOpacity>
         </View>
-        <View style={styles.fixedCounterCenterContainer}>
-          <View style={[styles.fixedCounterRow, participantCount && participantCount > 2 ? { paddingRight: 16 } : null]}>
+        <View style={[
+            styles.fixedCounterCenterContainer,
+            participantCount === 1 && { marginLeft: 32 },
+            participantCount != null && participantCount >= 2 && { alignItems: 'flex-end' }
+          ]}>
+          <View style={[
+              styles.fixedCounterRow,
+              participantCount && participantCount > 2 ? { paddingRight: 16 } : null,
+              participantCount === 1 ? { paddingLeft: 24 } : null
+            ]}>
             <TouchableOpacity
               onPress={() => handleDecrement(item.id)}
-              style={[styles.fixedActionButton, isSmallCard && { width: 50, height: 50 }]}
+              style={[
+                styles.fixedActionButton,
+                isSmallestCard && { width: 42, height: 42 },
+                isSmallCard && !isSmallestCard && { width: 50, height: 50 }
+              ]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.fixedActionButtonText, isSmallCard && { fontSize: 32 }, { color: textColor }]}>−</Text>
+              <Text style={[
+                styles.fixedActionButtonText,
+                isSmallestCard && { fontSize: 26 },
+                isSmallCard && !isSmallestCard && { fontSize: 32 },
+                { color: textColor }
+              ]}>−</Text>
             </TouchableOpacity>
             <Text style={[
               styles.fixedCountText, 
               { 
                 fontSize: fixedCountFontSize,
-                minWidth: participantCount && participantCount <= 2 ? 130 : participantCount === 3 ? 100 : participantCount === 4 ? 70 : 50,
-                marginHorizontal: participantCount && participantCount <= 2 ? 56 : participantCount === 3 ? 40 : participantCount === 4 ? 24 : 16,
+                minWidth: participantCount && participantCount <= 2 ? 130 : participantCount === 3 ? 100 : participantCount === 4 ? 70 : isSmallestCard ? 40 : 50,
+                marginHorizontal: participantCount && participantCount <= 2 ? 56 : participantCount === 3 ? 40 : participantCount === 4 ? 24 : isSmallestCard ? 12 : 16,
                 color: textColor
               }
             ]}>{count}</Text>
             <TouchableOpacity
               onPress={() => handleIncrement(item.id)}
-              style={[styles.fixedActionButton, isSmallCard && { width: 50, height: 50 }]}
+              style={[
+                styles.fixedActionButton,
+                isSmallestCard && { width: 42, height: 42 },
+                isSmallCard && !isSmallestCard && { width: 50, height: 50 }
+              ]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.fixedActionButtonText, isSmallCard && { fontSize: 32 }, { color: textColor }]}>+</Text>
+              <Text style={[
+                styles.fixedActionButtonText,
+                isSmallestCard && { fontSize: 26 },
+                isSmallCard && !isSmallestCard && { fontSize: 32 },
+                { color: textColor }
+              ]}>+</Text>
             </TouchableOpacity>
           </View>
           {/* Drink type buttons below the number */}
@@ -964,7 +1014,7 @@ export default function SessionScreen() {
             </View>
           )}
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -976,7 +1026,13 @@ export default function SessionScreen() {
     );
   }
 
-  const participantCount = participants.length;
+  const displayParticipants =
+    isOwner
+      ? participants
+      : currentParticipantId
+        ? participants.filter((p) => p.id === currentParticipantId)
+        : [];
+  const participantCount = displayParticipants.length;
   // Header height is now managed by React Navigation, use approximate height
   const headerHeight = 44 + insets.top; // Standard header height + safe area
   const availableHeight = SCREEN_HEIGHT - headerHeight - insets.bottom;
@@ -999,32 +1055,44 @@ export default function SessionScreen() {
     <View style={styles.container}>
       {participantCount === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No participants yet</Text>
+          <Text style={styles.emptyText}>
+            {isOwner ? 'No participants yet' : 'No participant card'}
+          </Text>
           {isOwner && (
             <Text style={styles.emptySubtext}>Tap + to add a participant</Text>
+          )}
+          {!isOwner && (
+            <Text style={styles.emptySubtext}>
+              Join this session via the invite link to get your card
+            </Text>
           )}
         </View>
       ) : useScrollableList ? (
         <FlatList
-          data={participants}
+          data={displayParticipants}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
-            <SwipeableCard
-              participantId={item.id}
-              onSwipeComplete={() => handleDeleteParticipant(item.id)}
-            >
-              {renderCard(item, index, undefined, true, undefined, participantCount, drinkTypes)}
-            </SwipeableCard>
+            <View style={{ width: CARD_WIDTH }}>
+              <SwipeableCard
+                participantId={item.id}
+                onSwipeComplete={() => handleDeleteParticipant(item.id)}
+              >
+                {renderCard(item, index, undefined, true, undefined, participantCount, drinkTypes)}
+              </SwipeableCard>
+            </View>
           )}
           contentContainerStyle={styles.scrollableListContent}
           scrollEnabled={true}
           showsVerticalScrollIndicator={true}
         />
       ) : (
-        <View style={styles.fixedContainer}>
-          {participants.map((item, index) => {
+        <View style={[
+          styles.fixedContainer,
+          participantCount >= 2 && { paddingBottom: 24 },
+        ]}>
+          {displayParticipants.map((item, index) => {
             const isFirst = index === 0;
-            const isLast = index === participants.length - 1;
+            const isLast = index === displayParticipants.length - 1;
             let borderRadius;
             if (participantCount === 1) {
               // Single card: rounded top and bottom corners
@@ -1047,7 +1115,8 @@ export default function SessionScreen() {
               <View 
                 key={item.id} 
                 style={{ 
-                  marginBottom: isLast ? 0 : CARD_SPACING
+                  width: CARD_WIDTH,
+                  marginBottom: isLast ? 0 : CARD_SPACING,
                 }}
               >
                 <SwipeableCard
@@ -1074,10 +1143,12 @@ const styles = StyleSheet.create({
   },
   fixedContainer: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: CARD_HORIZONTAL_PADDING,
+    alignItems: 'center',
   },
   scrollableListContent: {
-    padding: 12,
+    paddingHorizontal: CARD_HORIZONTAL_PADDING,
+    padding: CARD_HORIZONTAL_PADDING,
     paddingTop: 8,
   },
   participantCard: {
@@ -1099,12 +1170,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  scrollableCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 16,
+    paddingRight: 44,
+  },
+  scrollableMenuButtonAbsolute: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 1,
+  },
   scrollableParticipantName: {
     color: '#FFFFFF',
     fontSize: 24,
     fontWeight: '600',
     flex: 1,
-    marginRight: 16,
+  },
+  scrollableMenuButton: {
+    padding: 4,
+    minWidth: 32,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollableMenuIcon: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   scrollableCounterContainer: {
     alignItems: 'flex-end',
@@ -1120,16 +1216,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollableActionButton: {
-    width: 50,
-    height: 50,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     alignItems: 'center',
   },
   scrollableActionButtonText: {
     color: '#FFFFFF',
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '300',
-    lineHeight: 32,
+    lineHeight: 26,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1170,7 +1266,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 48,
     fontWeight: '600',
-    minWidth: 60,
+    minWidth: 40,
     textAlign: 'center',
     marginHorizontal: 12,
   },
@@ -1184,9 +1280,15 @@ const styles = StyleSheet.create({
   },
   fixedCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    paddingRight: 44,
+  },
+  fixedMenuButtonAbsolute: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 1,
   },
   nameContainer: {
     flexDirection: 'row',

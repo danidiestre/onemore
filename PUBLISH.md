@@ -1,6 +1,6 @@
-# Guía de Publicación - DrinkCounter
+# Guía de Publicación - onemore!
 
-Esta guía te ayudará a publicar la app DrinkCounter en App Store (iOS) y Google Play Store (Android).
+Esta guía te ayudará a publicar la app onemore! en App Store (iOS) y Google Play Store (Android).
 
 ## Prerrequisitos
 
@@ -179,7 +179,7 @@ Para publicar una nueva versión:
 
 - **Primera publicación**: Puede tardar varios días en ser aprobada
 - **Actualizaciones**: Generalmente se aprueban más rápido (horas/días)
-- **Deep Links**: La app ya tiene configurado el scheme `drinkcounter://` en `app.json`
+- **Deep Links**: La app ya tiene configurado el scheme `onemore://` en `app.json`
 - **Supabase**: Las credenciales están en `app.json` bajo `expo.extra`
 
 ## Troubleshooting

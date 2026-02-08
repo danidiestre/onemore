@@ -1,4 +1,4 @@
-# DrinkCounter
+# onemore!
 
 A React Native (Expo) app for tracking drinks among friends in a bar. Built with TypeScript, Supabase, and iOS-native design patterns.
 
@@ -145,13 +145,13 @@ drink-counter/
 ## Deep Linking
 
 The app supports deep links in the format:
-- `drinkcounter://join/<invite_code>`
+- `onemore://join/<invite_code>`
 - Universal links: `https://yourdomain.com/join/<invite_code>`
 
 To test deep links:
 ```bash
 # iOS Simulator
-xcrun simctl openurl booted "drinkcounter://join/ABC12345"
+xcrun simctl openurl booted "onemore://join/ABC12345"
 
 # Or use Expo Linking API in development
 ```
@@ -173,7 +173,7 @@ xcrun simctl openurl booted "drinkcounter://join/ABC12345"
 - Check Supabase project URL and anon key are correct
 
 ### Deep links not working
-- Verify scheme is set in `app.json` (`"scheme": "drinkcounter"`)
+- Verify scheme is set in `app.json` (`"scheme": "onemore"`)
 - For iOS, may need to configure Associated Domains for universal links
 - Test with `expo-linking` API first
 

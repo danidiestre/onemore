@@ -1,13 +1,12 @@
 {
-    "expo": {
-    "name": "DrinkCounter",
-    "slug": "drink-counter",
-    "owner": "danidiestre",
+  "expo": {
+    "name": "onemore!",
+    "slug": "onemore",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "scheme": "drinkcounter",
+    "scheme": "onemore",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -19,7 +18,10 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "associatedDomains": [
+        "applinks:links.drinkcounter.app"
+      ]
     },
     "android": {
       "package": "com.drinkcounter.app",
@@ -34,7 +36,8 @@
       "router": {},
       "eas": {
         "projectId": "64e63fae-70f3-40f7-9d38-1271390b742d"
-      }
+      },
+      "inviteLinkDomain": "https://links.drinkcounter.app"
     }
   }
 }

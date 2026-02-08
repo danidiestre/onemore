@@ -1,7 +1,7 @@
 import { Stack, useRouter, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { TouchableOpacity, Text, Pressable } from 'react-native';
+import { TouchableOpacity, Text, Pressable, View, StyleSheet } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 
@@ -21,15 +21,21 @@ export default function RootLayout() {
       }
     })();
 
-    // Handle deep links
+    // Handle deep links: onemore://join/CODE or https://domain.com/join/CODE
     const handleDeepLink = ({ url }: { url: string }) => {
       const parsed = Linking.parse(url);
-      const path = parsed.path || parsed.hostname;
-      if (path?.includes('/join/')) {
-        const code = path.split('/join/')[1]?.split('/')[0]?.split('?')[0];
-        if (code) {
-          router.push(`/join/${code}`);
-        }
+      const path = parsed.path || '';
+      const hostname = parsed.hostname || '';
+      let code: string | null = null;
+      if (path.includes('/join/')) {
+        code = path.split('/join/')[1]?.split('/')[0]?.split('?')[0] ?? null;
+      } else if (hostname === 'join' && path) {
+        code = path.split('/')[0]?.split('?')[0] ?? null;
+      } else if (hostname === 'join' && !path && parsed.queryParams?.code) {
+        code = String(parsed.queryParams.code);
+      }
+      if (code) {
+        router.push(`/join/${code}`);
       }
     };
 
@@ -101,17 +107,47 @@ export default function RootLayout() {
         <Stack.Screen 
           name="session/[id]/settings" 
           options={{ 
-            title: 'Settings', 
             presentation: 'modal',
             headerStyle: {
               backgroundColor: '#1C1C1E',
+              borderBottomWidth: 0,
             },
+            headerShadowVisible: false,
             contentStyle: {
               backgroundColor: '#1C1C1E',
             },
             headerTitleStyle: {
               fontWeight: '600',
             },
+            headerTitle: () => (
+              <View style={settingsHeaderStyles.container}>
+                <View style={settingsHeaderStyles.drawerHandle} />
+                <Text style={settingsHeaderStyles.title}>Settings</Text>
+              </View>
+            ),
+          }} 
+        />
+        <Stack.Screen 
+          name="session/[id]/balances" 
+          options={{ 
+            presentation: 'modal',
+            headerStyle: {
+              backgroundColor: '#1C1C1E',
+              borderBottomWidth: 0,
+            },
+            headerShadowVisible: false,
+            contentStyle: {
+              backgroundColor: '#1C1C1E',
+            },
+            headerTitleStyle: {
+              fontWeight: '600',
+            },
+            headerTitle: () => (
+              <View style={settingsHeaderStyles.container}>
+                <View style={settingsHeaderStyles.drawerHandle} />
+                <Text style={settingsHeaderStyles.title}>Balances</Text>
+              </View>
+            ),
           }} 
         />
         <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
@@ -119,3 +155,22 @@ export default function RootLayout() {
     </>
   );
 }
+
+const settingsHeaderStyles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerHandle: {
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginBottom: 16,
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+});

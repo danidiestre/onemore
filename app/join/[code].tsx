@@ -2,8 +2,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { addParticipantSlot } from '@/repo/sessions';
-import { ensureAuthenticated } from '@/lib/auth';
+import { addParticipantSlot, loadSessionData } from '@/repo/sessions';
+import { claimParticipant } from '@/repo/participants';
 import * as Haptics from 'expo-haptics';
 
 export default function JoinScreen() {
@@ -49,9 +49,29 @@ export default function JoinScreen() {
     setJoining(true);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Create new participant slot with the name; then claim it for this user
       await addParticipantSlot(sessionId, name.trim());
+      const data = await loadSessionData(sessionId);
+      const unclaimedWithName = data.participants
+        .filter((p) => p.display_name === name.trim() && !p.claimed_by_user_id)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const newParticipant = unclaimedWithName[0];
+      if (!newParticipant) {
+        const byCreated = [...data.participants].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        const last = byCreated.find((p) => !p.claimed_by_user_id) ?? byCreated[0];
+        if (last) {
+          await claimParticipant(last.id);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.replace(`/session/${sessionId}?participantId=${last.id}`);
+          return;
+        }
+        throw new Error('Could not find new participant');
+      }
+      await claimParticipant(newParticipant.id);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(`/session/${sessionId}`);
+      router.replace(`/session/${sessionId}?participantId=${newParticipant.id}`);
     } catch (error: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', error.message || 'Failed to join session');

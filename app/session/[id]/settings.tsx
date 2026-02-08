@@ -1,11 +1,10 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActionSheetIOS, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import type { Participant, DrinkType } from '@/types/database';
-import { loadSessionData, updateDrinkType, deleteDrinkType, addParticipantSlot, removeParticipantSlot, addDrinkType, updateParticipant } from '@/repo/sessions';
-import { formatCurrencyEUR } from '@/utils/currency';
+import { loadSessionData, updateDrinkType, deleteDrinkType, addParticipantSlot, removeParticipantSlot, addDrinkType, updateParticipant, deleteSession } from '@/repo/sessions';
 
 export default function SettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -17,10 +16,63 @@ export default function SettingsScreen() {
   const [editingDrinkTypes, setEditingDrinkTypes] = useState<Map<string, string>>(new Map());
   const [editingParticipants, setEditingParticipants] = useState<Map<string, string>>(new Map());
 
+  const latestForCleanup = useRef<{
+    editingDrinkTypes: Map<string, string>;
+    editingParticipants: Map<string, string>;
+    drinkTypes: DrinkType[];
+    participants: Participant[];
+    id: string | undefined;
+    isOwner: boolean;
+  }>({
+    editingDrinkTypes: new Map(),
+    editingParticipants: new Map(),
+    drinkTypes: [],
+    participants: [],
+    id: undefined,
+    isOwner: false,
+  });
+
+  useEffect(() => {
+    latestForCleanup.current = {
+      editingDrinkTypes,
+      editingParticipants,
+      drinkTypes,
+      participants,
+      id,
+      isOwner,
+    };
+  }, [editingDrinkTypes, editingParticipants, drinkTypes, participants, id, isOwner]);
+
   useEffect(() => {
     if (!id) return;
     loadData();
   }, [id]);
+
+  // Persist any dirty edits when leaving Settings (name of drink type or participant)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        const { editingDrinkTypes: editDt, editingParticipants: editP, drinkTypes: dts, participants: ps, id: sid, isOwner: owner } = latestForCleanup.current;
+        if (!sid || !owner) return;
+        dts.forEach((dt) => {
+          const value = editDt.get(dt.id);
+          if (value !== undefined && value.trim() !== '' && value !== dt.name) {
+            updateDrinkType(sid, dt.id, { name: value.trim() }).catch((err) =>
+              console.warn('Failed to save drink type name on leave:', err)
+            );
+          }
+        });
+        ps.forEach((p) => {
+          const value = editP.get(p.id);
+          if (value !== undefined && value.trim() !== '' && value !== p.display_name) {
+            updateParticipant(sid, p.id, { display_name: value.trim() }).catch((err) =>
+              console.warn('Failed to save participant name on leave:', err)
+            );
+          }
+        });
+      };
+    }, [])
+  );
 
   const loadData = async () => {
     if (!id) return;
@@ -209,6 +261,29 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleDeleteSession = () => {
+    if (!id || !isOwner) return;
+    Alert.alert(
+      'Eliminar sesión',
+      '¿Estás seguro? Se borrarán todos los participantes, bebidas y el historial. Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSession(id);
+              router.replace('/');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'No se pudo eliminar la sesión');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -322,6 +397,15 @@ export default function SettingsScreen() {
           </View>
         ))}
       </View>
+
+      {isOwner && (
+        <View style={styles.deleteSection}>
+          <TouchableOpacity style={styles.deleteSessionButton} onPress={handleDeleteSession}>
+            <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+            <Text style={[styles.deleteSessionButtonText, { marginLeft: 8 }]}>Eliminar sesión</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -415,5 +499,25 @@ const styles = StyleSheet.create({
     fontSize: 17,
     textAlign: 'center',
     marginTop: 32,
+  },
+  deleteSection: {
+    padding: 16,
+    paddingTop: 24,
+    paddingBottom: 32,
+  },
+  deleteSessionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 59, 48, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.4)',
+  },
+  deleteSessionButtonText: {
+    color: '#FF3B30',
+    fontSize: 17,
+    fontWeight: '600',
   },
 });

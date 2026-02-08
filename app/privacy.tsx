@@ -6,7 +6,7 @@ export default function PrivacyScreen() {
       <View style={styles.content}>
         <Text style={styles.title}>Privacy Policy</Text>
         <Text style={styles.text}>
-          DrinkCounter respects your privacy. We do not collect any personal data beyond what is necessary for the app to function.
+          onemore! respects your privacy. We do not collect any personal data beyond what is necessary for the app to function.
         </Text>
         <Text style={styles.text}>
           The app uses anonymous authentication to provide a stable user identifier. Session data (participant names, drink events, and drink types) are stored in Supabase and are only accessible to users who have the session invite code.

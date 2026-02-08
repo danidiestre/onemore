@@ -2,6 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Pressabl
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import { createSession } from '@/repo/sessions';
+import { getInviteLink } from '@/utils/invite';
 import { ensureAuthenticated } from '@/lib/auth';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -105,7 +106,7 @@ export default function CreateSessionScreen() {
       
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      const link = `drinkcounter://join/${session.invite_code}`;
+      const link = getInviteLink(session.invite_code);
       setInviteLink(link);
       setSessionId(session.id);
       setSessionCreated(true);
