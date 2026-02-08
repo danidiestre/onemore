@@ -55,7 +55,7 @@ const SPANISH_ANIMALS = [
 ];
 
 export default function SessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, created } = useLocalSearchParams<{ id: string; created?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -64,7 +64,9 @@ export default function SessionScreen() {
   const [events, setEvents] = useState<DrinkEvent[]>([]);
   const [inviteCode, setInviteCode] = useState<string>('');
   const [sessionName, setSessionName] = useState<string>('');
-  const [isOwner, setIsOwner] = useState(false);
+  const [isOwnerFromData, setIsOwnerFromData] = useState(false);
+  // Show owner UI when backend says so, or when we just navigated from create-session (avoids auth race)
+  const isOwner = isOwnerFromData || created === '1';
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [recentEvents, setRecentEvents] = useState<Map<string, { count: number; timestamp: number }>>(new Map());
@@ -164,7 +166,7 @@ export default function SessionScreen() {
       localEventsRef.current = data.events;
       setInviteCode(data.inviteCode);
       setSessionName(data.sessionName);
-      setIsOwner(data.isOwner);
+      setIsOwnerFromData(data.isOwner);
       setCurrentParticipantId(data.currentParticipantId ?? null);
 
       // Update color map: use saved color_index if available, otherwise assign based on creation order

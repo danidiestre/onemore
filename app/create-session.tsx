@@ -139,14 +139,14 @@ export default function CreateSessionScreen() {
         url: inviteLink,
         title: `Join ${sessionName}`,
       });
-      // Navigate after sharing
-      router.replace(`/session/${sessionId}`);
+      // Navigate after sharing (created=1 so session screen shows owner actions immediately)
+      router.replace(`/session/${sessionId}?created=1`);
     } catch (error: any) {
       if (error.message !== 'User did not share') {
         console.error('Failed to share:', error);
       }
       // Navigate anyway if share fails or user cancels
-      router.replace(`/session/${sessionId}`);
+      router.replace(`/session/${sessionId}?created=1`);
     }
   };
 
