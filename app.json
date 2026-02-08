@@ -18,10 +18,7 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      },
-      "associatedDomains": [
-        "applinks:links.drinkcounter.app"
-      ]
+      }
     },
     "android": {
       "package": "com.drinkcounter.app",
