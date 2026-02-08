@@ -1,13 +1,17 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Pressable, Share, PanResponder, Keyboard, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Pressable, Share, PanResponder, Keyboard, Alert, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import { createSession } from '@/repo/sessions';
+import { getProCheck } from '@/repo/subscription';
 import { getInviteLink } from '@/utils/invite';
 import { ensureAuthenticated } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
+import { initRevenueCat, presentPaywall, presentCustomerCenter, restorePurchases } from '@/lib/revenuecat';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function CreateSessionScreen() {
   const router = useRouter();
@@ -19,6 +23,9 @@ export default function CreateSessionScreen() {
   const [inviteLink, setInviteLink] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [proCheck, setProCheck] = useState<{ canCreate: boolean; sessionCount: number; isPro: boolean } | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const dragOffset = useRef(0);
@@ -39,6 +46,20 @@ export default function CreateSessionScreen() {
       friction: 11,
     }).start();
   }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    (async () => {
+      try {
+        const user = await ensureAuthenticated();
+        initRevenueCat(user.id);
+        const check = await getProCheck();
+        setProCheck(check);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [authReady]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -95,7 +116,13 @@ export default function CreateSessionScreen() {
       return;
     }
 
-    if (!authReady || loading) return;
+    if (!authReady || loading || proCheck === null) return;
+
+    // First session free; from second session require Pro
+    if (!proCheck.canCreate) {
+      setShowPaywall(true);
+      return;
+    }
 
     // Dismiss keyboard
     Keyboard.dismiss();
@@ -115,6 +142,89 @@ export default function CreateSessionScreen() {
       console.error('Failed to create session:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
+    try {
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        const result = await presentPaywall();
+        if (result.success) {
+          const check = await getProCheck();
+          setProCheck(check);
+          setShowPaywall(false);
+        } else if (result.error) {
+          Alert.alert('Error en el pago', result.error);
+        }
+        return;
+      }
+
+      // Web: Stripe checkout
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: {
+          success_url: 'onemore://pro-success',
+          cancel_url: 'onemore://',
+        },
+      });
+      if (error) throw error;
+      const url = data?.url;
+      if (__DEV__) console.log('Checkout response:', { hasUrl: !!url, url: url ? `${url.slice(0, 50)}...` : null });
+      if (url && typeof url === 'string' && url.startsWith('http')) {
+        try {
+          await WebBrowser.openBrowserAsync(url, { createTask: false });
+        } catch (openErr) {
+          const fallback = await Linking.canOpenURL(url).catch(() => false);
+          if (fallback) await Linking.openURL(url);
+          else Alert.alert('Abrir enlace', 'Copia y abre en el navegador:\n' + url);
+        }
+      } else {
+        Alert.alert('Error', data?.error ?? 'No se recibió enlace de pago. Revisa la consola.');
+      }
+    } catch (e: any) {
+      console.error('Checkout error:', e);
+      let msg = e?.message ?? 'No se pudo abrir el pago';
+      const ctx = e?.context;
+      if (ctx) {
+        try {
+          const body = typeof ctx.json === 'function'
+            ? await ctx.json()
+            : typeof ctx.text === 'function'
+              ? JSON.parse(await ctx.text())
+              : ctx;
+          if (body?.error) msg = body.error;
+        } catch (_) {
+          try {
+            if (typeof ctx.text === 'function') msg = await ctx.text() || msg;
+          } catch {}
+        }
+      }
+      Alert.alert('Error en el pago', msg);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
+    try {
+      const result = await restorePurchases();
+      if (result.success && result.isPro) {
+        const check = await getProCheck();
+        setProCheck(check);
+        setShowPaywall(false);
+        Alert.alert('Listo', 'Suscripción restaurada.');
+      } else if (result.error) {
+        Alert.alert('Restaurar', result.error);
+      } else {
+        Alert.alert('Restaurar', 'No se encontró ninguna suscripción anterior.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo restaurar');
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -186,10 +296,57 @@ export default function CreateSessionScreen() {
             {/* Content area with rounded background - iOS style */}
             <View style={[
               styles.contentContainer,
-              !sessionCreated && styles.contentContainerCentered,
+              !sessionCreated && !showPaywall && styles.contentContainerCentered,
               sessionCreated && styles.contentContainerShare,
             ]}>
-              {!sessionCreated ? (
+              {showPaywall ? (
+                <View style={styles.paywallSection}>
+                  <Text style={styles.paywallTitle}>OneMore Pro</Text>
+                  <Text style={styles.paywallText}>
+                    La primera sesión es gratis. A partir de la segunda necesitas Pro: 4€/mes.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleSubscribe}
+                    style={[styles.startButton, checkoutLoading && styles.buttonDisabled]}
+                    activeOpacity={0.7}
+                    disabled={checkoutLoading}
+                  >
+                    <Text style={styles.startButtonText}>
+                      {checkoutLoading ? 'Cargando…' : 'Suscribirse 4€/mes'}
+                    </Text>
+                  </TouchableOpacity>
+                  {(Platform.OS === 'ios' || Platform.OS === 'android') && (
+                    <>
+                      <TouchableOpacity
+                        onPress={handleRestorePurchases}
+                        disabled={checkoutLoading}
+                        style={styles.restoreLink}
+                      >
+                        <Text style={styles.backLinkText}>Restaurar compras</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          setCheckoutLoading(true);
+                          const err = await presentCustomerCenter();
+                          setCheckoutLoading(false);
+                          if (err?.error) Alert.alert('Error', err.error);
+                          else {
+                            const check = await getProCheck();
+                            setProCheck(check);
+                          }
+                        }}
+                        disabled={checkoutLoading}
+                        style={styles.restoreLink}
+                      >
+                        <Text style={styles.backLinkText}>Gestionar suscripción</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  <TouchableOpacity onPress={() => setShowPaywall(false)} style={styles.backLink}>
+                    <Text style={styles.backLinkText}>Volver</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : !sessionCreated ? (
                 <View style={styles.inputSection}>
                   <Text style={styles.inputLabel}>SESSION NAME</Text>
                   <TextInput
@@ -363,5 +520,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 24,
     includeFontPadding: false,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  paywallSection: {
+    width: '100%',
+    paddingVertical: 8,
+  },
+  paywallTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  paywallText: {
+    color: '#8E8E93',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  backLink: {
+    marginTop: 16,
+    alignSelf: 'center',
+  },
+  restoreLink: {
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  backLinkText: {
+    color: '#8E8E93',
+    fontSize: 16,
   },
 });

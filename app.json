@@ -28,7 +28,8 @@
       "versionCode": 1
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-web-browser"
     ],
     "extra": {
       "supabaseUrl": "https://bclmvdrctlrfjzyblzbq.supabase.co",

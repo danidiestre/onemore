@@ -12,6 +12,8 @@ const extra = {
       ? process.env.EXPO_PUBLIC_INVITE_LINK_DOMAIN
       : `https://${process.env.EXPO_PUBLIC_INVITE_LINK_DOMAIN}`,
   }),
+  revenueCatApiKeyIos: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS ?? process.env.EXPO_PUBLIC_REVENUECAT_API_KEY,
+  revenueCatApiKeyAndroid: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID ?? process.env.EXPO_PUBLIC_REVENUECAT_API_KEY,
 };
 
 module.exports = {

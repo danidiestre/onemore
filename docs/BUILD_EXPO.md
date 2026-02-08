@@ -1,53 +1,85 @@
-# Build to Expo (expo.dev) with EAS
+# Build iOS y Android con EAS (Expo)
 
-Builds run on **Expo Application Services (EAS)** and appear in your project on [expo.dev](https://expo.dev).
+Los builds se ejecutan en **EAS (Expo Application Services)** y aparecen en tu proyecto en [expo.dev](https://expo.dev).
 
-## Prerequisites
+## Requisitos
 
 - [EAS CLI](https://docs.expo.dev/build/setup/): `npm install -g eas-cli`
-- Log in: `eas login` (use your Expo account)
+- Cuenta Expo: `eas login`
+- Para **App Store / Play Store**: cuenta Apple Developer y Google Play Console, y credenciales configuradas en EAS (o en el primer `eas submit`).
 
-## Quick build
+## Build para tiendas (iOS + Android)
 
-From the project root:
+Desde la raíz del proyecto:
 
 ```bash
-# Build for both platforms (iOS + Android)
+# Ambas plataformas
 eas build --platform all --profile production
 
-# Or one platform
+# Solo iOS
 eas build --platform ios --profile production
+
+# Solo Android
 eas build --platform android --profile production
 ```
 
-Builds run in the cloud. When they finish, you get a link to the build on **expo.dev** and, for internal distribution, install links.
+El build se hace en la nube. Al terminar, en [expo.dev](https://expo.dev) → tu proyecto → **Builds** tendrás los artefactos y enlaces para descargar o enviar a las tiendas.
 
-## Build profiles (eas.json)
+## Perfiles (eas.json)
 
-| Profile       | Use case                          |
-|---------------|-----------------------------------|
-| `development` | Dev client, internal distribution |
-| `preview`     | Internal testing (simulator: false on iOS) |
-| `production`  | Store-ready build (`distribution: store`)   |
+| Perfil         | Uso |
+|----------------|-----|
+| `development`  | Dev client, distribución interna (probar RevenueCat, etc.) |
+| `preview`      | Pruebas internas (IPA/APK instalables) |
+| `production`   | Build para store (App Store / Play Store) |
 
-Default profile is `production` if you omit `--profile`.
+Por defecto se usa `production` si no indicas `--profile`.
 
-## Environment variables / secrets
+## Variables de entorno y secretos (EAS)
 
-- **Local:** copy `.env.example` to `.env` and set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Optional: `EXPO_PUBLIC_INVITE_LINK_DOMAIN`.
-- **EAS Build:** in [expo.dev](https://expo.dev) → your project → **Secrets**, add the same vars. They are injected at build time and merged into the app config by `app.config.js`.
+En [expo.dev](https://expo.dev) → tu proyecto → **Secrets** añade las que necesites para el build. Se inyectan en build time y `app.config.js` las pasa al app.
 
-If you don’t set them, the app falls back to the values in `app.json` `extra` (already set for Supabase and invite domain).
+| Variable | Necesaria para |
+|----------|-----------------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase |
+| `EXPO_PUBLIC_REVENUECAT_API_KEY` o `EXPO_PUBLIC_REVENUECAT_API_KEY_IOS` / `_ANDROID` | RevenueCat (suscripción Pro) |
+| `EXPO_PUBLIC_INVITE_LINK_DOMAIN` | (opcional) Dominio de invite links |
 
-## After the build
+Si no las configuras en Secrets, la app usará los valores por defecto de `app.json` `extra` (Supabase e invite domain ya tienen fallback).
 
-- **expo.dev** → your project → **Builds**: view, share internal links, or download artifacts.
-- **Submit to stores:** `eas submit --platform ios` or `eas submit --platform android` (requires store credentials; EAS can manage them).
+## Enviar a las tiendas (submit)
 
-## Useful commands
+Cuando tengas un build **production** listo:
+
+```bash
+# iOS (App Store Connect)
+eas submit --platform ios --latest
+
+# Android (Google Play)
+eas submit --platform android --latest
+```
+
+La primera vez, EAS te pedirá credenciales (Apple ID, keystore de Android, etc.). Puedes configurarlas en [expo.dev](https://expo.dev) → project → **Credentials**.
+
+## Después del build
+
+- **Builds**: [expo.dev](https://expo.dev) → tu proyecto → **Builds** → ver, descargar o enviar a store.
+- **Subir a stores**: `eas submit --platform ios` / `eas submit --platform android` (o desde la web en el detalle del build).
+
+## Comandos útiles
 
 ```bash
 eas whoami
 eas build:list
 eas build:view
+eas credentials
 ```
+
+## Nota: RevenueCat e IAP
+
+Para que las compras in-app (suscripción Pro) funcionen en el build de producción, asegúrate de:
+
+1. Tener los productos y el entitlement `pro` configurados en RevenueCat (ver `docs/CHECKLIST_SUSCRIPCION_4.99.md`).
+2. Tener las API keys de RevenueCat en EAS Secrets (o en `app.json` extra para desarrollo).
+3. Usar el perfil **production** para builds que subas a App Store / Play Store.

@@ -5,6 +5,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { Participant, DrinkType } from '@/types/database';
 import { loadSessionData, updateDrinkType, deleteDrinkType, addParticipantSlot, removeParticipantSlot, addDrinkType, updateParticipant, deleteSession } from '@/repo/sessions';
+import { presentCustomerCenter } from '@/lib/revenuecat';
 
 export default function SettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -398,6 +399,22 @@ export default function SettingsScreen() {
         ))}
       </View>
 
+      {(Platform.OS === 'ios' || Platform.OS === 'android') && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.manageSubscriptionRow}
+            onPress={async () => {
+              const err = await presentCustomerCenter();
+              if (err?.error) Alert.alert('Error', err.error);
+            }}
+          >
+            <Ionicons name="card-outline" size={22} color="#007AFF" />
+            <Text style={styles.manageSubscriptionText}>One More! Pro – Gestionar suscripción</Text>
+            <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {isOwner && (
         <View style={styles.deleteSection}>
           <TouchableOpacity style={styles.deleteSessionButton} onPress={handleDeleteSession}>
@@ -499,6 +516,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     textAlign: 'center',
     marginTop: 32,
+  },
+  manageSubscriptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  manageSubscriptionText: {
+    flex: 1,
+    marginLeft: 12,
+    color: '#FFFFFF',
+    fontSize: 17,
   },
   deleteSection: {
     padding: 16,

@@ -1,14 +1,21 @@
 import { Stack, useRouter, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { TouchableOpacity, Text, Pressable, View, StyleSheet } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { configureRevenueCat } from '@/lib/revenuecat';
 import * as Linking from 'expo-linking';
 
 export default function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    // Configure RevenueCat at app start (iOS/Android)
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      configureRevenueCat();
+    }
+
     // Bootstrap anonymous auth on app start
     (async () => {
       try {
